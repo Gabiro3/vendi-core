@@ -1,0 +1,103 @@
+# Vendi Retail Intelligence – production-mode local stack
+#
+# Prerequisites:
+#   1. Copy .env.example to .env.prod and fill in all values.
+#   2. Ensure SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY,
+#      SUPABASE_JWKS_URL (or SUPABASE_JWT_SECRET), and ALLOWED_ORIGINS are set.
+#      REDIS_URL and SYNC_JOBS are intentionally overridden below.
+#
+# Usage:
+#   docker compose up --build          # start everything
+#   docker compose up --build worker   # rebuild + restart worker only
+#   docker compose logs -f api worker  # follow both logs
+#   docker compose down -v             # stop and remove volumes
+
+services:
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  # Job queue broker for ARQ. Data is persisted in a named volume so queued
+  # jobs survive a container restart. In production, consider a managed Redis
+  # service (Upstash, Railway Redis, ElastiCache) and set REDIS_URL accordingly.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ── API ────────────────────────────────────────────────────────────────────
+  # Gunicorn + UvicornWorker. Handles HTTP, enqueues ML jobs to Redis.
+  # No ML work happens here in production (SYNC_JOBS=false).
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.prod
+    environment:
+      # These override anything in .env.prod for container networking.
+      REDIS_URL: redis://redis:6379/0
+      SYNC_JOBS: "false"
+      ENV: prod
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request, sys; r = urllib.request.urlopen('http://localhost:8000/health', timeout=4); sys.exit(0 if r.status == 200 else 1)"
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # ── Worker ─────────────────────────────────────────────────────────────────
+  # ARQ worker: dequeues jobs from Redis and runs the ML modules.
+  # CPU/memory-bound work (LightGBM, FP-Growth, BG/NBD) happens here.
+  # Scale this service independently if you need more throughput:
+  #   docker compose up --scale worker=2
+  #
+  # ARQ's default max_jobs=10; the WorkerSettings class in app/worker.py
+  # can cap this lower to bound memory if your ML jobs are large.
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command:
+      - python
+      - -m
+      - arq
+      - app.worker:WorkerSettings
+    env_file:
+      - .env.prod
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      SYNC_JOBS: "false"
+      ENV: prod
+    depends_on:
+      redis:
+        condition: service_healthy
+    # Workers don't expose HTTP; override the image's HEALTHCHECK with a
+    # simple Redis ping to confirm the worker can reach the broker.
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import redis, sys; r = redis.from_url('redis://redis:6379/0'); sys.exit(0 if r.ping() else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  redis_data:

@@ -1,0 +1,77 @@
+[project]
+name = "vendi-retail-intel"
+version = "0.1.0"
+description = "Vendi Retail Intelligence Platform - backend API and ML modules"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "gunicorn==23.0.0",
+    "pydantic==2.10.4",
+    "pydantic-settings==2.7.1",
+    "python-multipart==0.0.20",
+    "arq==0.26.3",
+    "redis==5.2.1",
+    "supabase==2.10.0",
+    "pyjwt[crypto]==2.10.1",
+    "pandas==2.2.3",
+    "numpy>=1.26.4,<3",
+    "pyarrow==18.1.0",
+    "lightgbm==4.5.0",
+    "holidays==0.64",
+    "mlxtend==0.23.3",
+    "lifetimes==0.11.3",
+    "structlog==24.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+    "httpx>=0.26,<0.28",
+    "fakeredis==2.26.2",
+    "ruff==0.8.4",
+    "black==24.10.0",
+    "mypy==1.14.0",
+    "pandas-stubs==2.2.3.241126",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*", "ml*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's `Depends`/`File`/`Form`/`Query` etc. are designed to be used as
+# call expressions in parameter defaults; B008 would otherwise flag every
+# route handler in app/routers/.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.params.Depends",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Query",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

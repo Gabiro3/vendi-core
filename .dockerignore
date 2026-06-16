@@ -1,0 +1,41 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.eggs/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Secrets — NEVER bake .env files into the image
+.env
+.env.*
+!.env.example
+
+# Dev / CI tooling (not needed at runtime)
+tests/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local data files
+*.csv
+*.parquet
+data.md
+
+# Docs
+README.md
+
+# Git
+.git/
+.gitignore
+
+# Docker files themselves (avoids cache-busting on edits)
+Dockerfile
+docker-compose.yml
+.dockerignore
